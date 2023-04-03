@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.9.0;
+pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts@4.8.2/token/ERC20/IERC20.sol";
 contract vesting {
 
     struct preSalePhase {
@@ -36,6 +36,10 @@ contract vesting {
     mapping (uint256 => preSalePhase) preSaleNumber;
 
     mapping(uint256  => mapping ( uint =>mapping (address => preSaleInvestor))) public preSaleInvestorList;
+
+    mapping(bytes32 => address) referralMap ;
+
+
 
     constructor (address _token) {
         owner = msg.sender;
@@ -83,7 +87,7 @@ contract vesting {
         return cate;
     }
 
-    function lock(uint256 _id ,address _from , address _investor , uint256 _amount) external {
+    function lock(uint256 _id ,address _from , address _investor , uint256 _amount , bytes32 _referalCode) external {
         require(_amount <= preSaleNumber[id].totalTokens , "Insufficient tokens try a lower value");
         require(block.timestamp > preSaleNumber[id].startTime , "Time of presale has not yet arrived");
         require(block.timestamp > preSaleNumber[id].endTime , "Time of presale has passed");
@@ -97,6 +101,10 @@ contract vesting {
         preSaleInvestorList[_id][cat][_investor].claimed = false;
         preSaleInvestorList[_id][cat][_investor].lockTime = TGE;
         preSaleInvestorList[_id][cat][_investor].refferal = keccak256(abi.encodePacked(_investor)); 
+
+        referal( preSaleInvestorList[_id][cat][_investor].refferal , _investor);
+        token.transferFrom(_from , referralMap[_referalCode] , _amount/20) ;
+
     }
 
     function unlockedTokens(uint _id , uint _cat , address _investor) public returns (uint256) {
@@ -130,6 +138,11 @@ contract vesting {
             token.transfer(_investor , _claimAmount);
         }
         
+    }
+
+    function referal(bytes32 _code , address _sponcer) public {
+        referralMap[_code] = _sponcer ;
+
     }
 
     function getTime() external view returns (uint256) {
