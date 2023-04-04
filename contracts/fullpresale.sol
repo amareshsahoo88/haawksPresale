@@ -171,12 +171,14 @@ contract vesting {
 
 // This is the most important function which locks the investment and other details .
 
-    function lock(uint256 _id ,address _from , address _investor , uint256 _amount , bytes32 _referalCode) external {
+    function lock(uint256 _id ,address _from , uint256 _amount , bytes32 _referalCode) external {
         require(_amount <= preSaleNumber[id].totalTokens , "Insufficient tokens try a lower value");
         require(block.timestamp > preSaleNumber[id].startTime , "Time of presale has not yet arrived");
         require(block.timestamp > preSaleNumber[id].endTime , "Time of presale has passed");
         
         cat = category(_amount);
+
+        address _investor = msg.sender;
 
         pushToArrayById(_id , _investor);
 
@@ -195,7 +197,9 @@ contract vesting {
 
 // This function is to find the value of the unlocked tokens.
 
-    function unlockedTokens(uint _id , uint _cat , address _investor) public returns (uint256) {
+    function unlockedTokens(uint _id , uint _cat) public returns (uint256) {
+        
+        address _investor = msg.sender;
 
         if(block.timestamp> TGE && block.timestamp< TGE+10){
             preSaleInvestorList[_id][_cat][_investor].unlockedTokens += preSaleInvestorList[_id][_cat][_investor].balance/2;
@@ -210,11 +214,16 @@ contract vesting {
 
 // This is the withdrawal function which shall be used by the investor to withdraw tokens.
 
-    function withdraw(uint _id , address _investor , uint256 _cat , uint256 _claimAmount) external {
+    function withdraw(uint _id ,  uint256 _cat , uint256 _claimAmount) external {
+        
+        address _investor = msg.sender;
+
         require(preSaleInvestorList[_id][_cat][_investor].invested , "You are not an investor");
         require(block.timestamp > preSaleInvestorList[_id][_cat][_investor].lockTime ,"Tokens have not been unlocked");
         
-        preSaleInvestorList[_id][_cat][_investor].unlockedTokens = unlockedTokens(_id , _cat , _investor);
+        
+        
+        preSaleInvestorList[_id][_cat][_investor].unlockedTokens = unlockedTokens(_id , _cat);
         if(preSaleInvestorList[_id][_cat][_investor].claimed){
             preSaleInvestorList[_id][_cat][_investor].availableForClaim = preSaleInvestorList[_id][_cat][_investor].unlockedTokens - preSaleInvestorList[_id][_cat][_investor].tokenClaimed;
         }
