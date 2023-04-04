@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts@4.8.2/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract vesting {
 
 // This structure will create a presale which shall have 7 phases 1% of total supply each.
@@ -65,10 +65,51 @@ contract vesting {
 
 // constructor stores the address of the owner and the token.
 
-    constructor (address _token) {
+    uint256 public tgeTimestamp;
+
+    constructor (address _token, uint256 year, uint256 month, uint256 day) {
         owner = msg.sender;
         token = IERC20(_token);
+
+        tgeTimestamp = timestampFromDate(year, month, day);
         
+    }
+
+    function timestampFromDate(uint256 year, uint256 month, uint256 day) public pure returns (uint256) {
+        require(year >= 1970, "Year cannot be before 1970.");
+        require(month >= 1 && month <= 12, "Invalid month.");
+        require(day >= 1 && day <= 31, "Invalid day.");
+        
+        uint256[12] memory daysInMonth = [uint256(31), 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        
+        // Check for leap year
+        if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) {
+            daysInMonth[1] = 29;
+            //if leap year, febrauary daysInMonth[1] would be adjusted to 29 days
+        }
+        
+        require(day <= daysInMonth[month - 1], "Invalid day for given month.");
+        
+        uint256[12] memory cumulativeDays;
+        uint256 totalDays;
+        
+        for (uint256 i = 0; i < month - 1; i++) {
+            cumulativeDays[i + 1] = cumulativeDays[i] + daysInMonth[i];
+        }
+        
+        totalDays = cumulativeDays[month - 1] + day - 1;
+        uint256 secondsInDay = 86400;
+        uint256 timestamp = totalDays * secondsInDay;
+        for (uint256 i = 1970; i < year; i++) {
+            if (i % 4 == 0 && (i % 100 != 0 || i % 400 == 0)) {
+                timestamp += 31622400;
+                //366 days
+            } else {
+                timestamp += 31536000;
+                //365 days
+            }
+        }
+        return timestamp;
     }
 
 // modifier used to implement in functions which only the owner can call
