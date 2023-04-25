@@ -14,6 +14,11 @@ contract vesting {
         uint tokenPrice;
     }
     
+    event StorePreSalePhase(uint id,uint startTime,
+        uint endTime,
+        uint totalTokens,
+        uint tokenPrice) ; 
+
 // This structure is for the investor details who is investing in the pre-sale . 
 // This shall keep updating as the investors keep getting added.
 
@@ -67,50 +72,56 @@ contract vesting {
 
     uint256 public tgeTimestamp;
 
-    constructor (address _token, uint256 year, uint256 month, uint256 day) {
+    constructor (address _token, uint16 year, uint256 month, uint256 day) {
         owner = msg.sender;
         token = IERC20(_token);
 
-        tgeTimestamp = timestampFromDate(year, month, day);
+        tgeTimestamp = dateToTimestamp(year, month, day);
         
     }
 
-    function timestampFromDate(uint256 year, uint256 month, uint256 day) public pure returns (uint256) {
-        require(year >= 1970, "Year cannot be before 1970.");
-        require(month >= 1 && month <= 12, "Invalid month.");
-        require(day >= 1 && day <= 31, "Invalid day.");
+    // unix timestamp conversion  
+    function dateToTimestamp(uint16 year, uint month, uint day) public pure returns (uint256) {
+        require(year >= 1970, "Year must be 1970 or later");
+        require(month >= 1 && month <= 12, "Month must be between 1 and 12");
+        require(day >= 1 && day <= 31, "Day must be between 1 and 31");
         
-        uint256[12] memory daysInMonth = [uint256(31), 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        uint timestamp = (uint(year) - 1970) * 31536000; // number of seconds in a non-leap year
+        uint i;
         
-        // Check for leap year
-        if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) {
-            daysInMonth[1] = 29;
-            //if leap year, febrauary daysInMonth[1] would be adjusted to 29 days
-        }
-        
-        require(day <= daysInMonth[month - 1], "Invalid day for given month.");
-        
-        uint256[12] memory cumulativeDays;
-        uint256 totalDays;
-        
-        for (uint256 i = 0; i < month - 1; i++) {
-            cumulativeDays[i + 1] = cumulativeDays[i] + daysInMonth[i];
-        }
-        
-        totalDays = cumulativeDays[month - 1] + day - 1;
-        uint256 secondsInDay = 86400;
-        uint256 timestamp = totalDays * secondsInDay;
-        for (uint256 i = 1970; i < year; i++) {
-            if (i % 4 == 0 && (i % 100 != 0 || i % 400 == 0)) {
-                timestamp += 31622400;
-                //366 days
+        // add up the number of seconds for each month
+        for (i = 1; i < month; i++) {
+            if (i == 2) { // February
+                if (isLeapYear(year)) {
+                    timestamp += 2505600; // 29 days in a leap year
+                } else {
+                    timestamp += 2419200; // 28 days in a non-leap year
+                }
+            } else if (i == 4 || i == 6 || i == 9 || i == 11) {
+                timestamp += 2592000; // 30 days in April, June, September, November
             } else {
-                timestamp += 31536000;
-                //365 days
+                timestamp += 2678400; // 31 days in the other months
             }
         }
+        
+        // add the number of seconds for the given day
+        timestamp += (uint256(day) - 1) * 86400; // 86400 seconds in a day
+        
         return timestamp;
     }
+    
+    function isLeapYear(uint16 year) internal pure returns (bool) {
+        if (year % 4 != 0) {
+            return false;
+        } else if (year % 100 != 0) {
+            return true;
+        } else if (year % 400 != 0) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
 
 // modifier used to implement in functions which only the owner can call
 
@@ -122,17 +133,23 @@ contract vesting {
 // Through this function TGE date can be altered by the owner .
 
     function setTGE (uint _TGE) public onlyowner {
+        require(_TGE>=block.timestamp,"Invalid date entered");
         TGE = _TGE ;
     }
 
 // This function shall create a presale phase and the values are set.
 
     function createPreSale(uint256 _totalToken , uint256 _tokenPrice , uint _startTime , uint _endTime) external onlyowner returns(bool){
+        require(_startTime>=block.timestamp,"Invalid date entered");
+        require(_startTime > _endTime,"End time should be more than start time");
+        
         id++;
         preSaleNumber[id].startTime = _startTime;
         preSaleNumber[id].endTime = _endTime;
         preSaleNumber[id].totalTokens = _totalToken;
         preSaleNumber[id].tokenPrice = _tokenPrice;
+        emit StorePreSalePhase(id, preSaleNumber[id].startTime, preSaleNumber[id].endTime, preSaleNumber[id].totalTokens, preSaleNumber[id].tokenPrice);
+        //emit an event here along with timestamp
         return true;
     }
 
@@ -163,7 +180,7 @@ contract vesting {
 // this array is to store the address of the investor as per a particular phase
 
     function pushToArrayById(uint256 _id , address _investor) public {
-        
+        require(_investor!= address(0),"Invalid address");
             idList[_id][count] = _investor;
             count++;
         
@@ -174,7 +191,7 @@ contract vesting {
     function lock(uint256 _id ,address _from , uint256 _amount , bytes32 _referalCode) external {
         require(_amount <= preSaleNumber[id].totalTokens , "Insufficient tokens try a lower value");
         require(block.timestamp > preSaleNumber[id].startTime , "Time of presale has not yet arrived");
-        require(block.timestamp > preSaleNumber[id].endTime , "Time of presale has passed");
+        require(block.timestamp > preSaleNumber[id].endTime , "Time of presale has passed");// block.timestamp < preSaleNumber[id].endTime 
         
         cat = category(_amount);
 
