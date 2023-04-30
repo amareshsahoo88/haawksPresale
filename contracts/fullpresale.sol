@@ -32,7 +32,7 @@ contract vesting {
         bool claimed;
         uint256 lockTime;
         uint category;
-        bytes32 refferal;
+        uint refferal;
         
     }
 
@@ -141,7 +141,7 @@ contract vesting {
 
     function createPreSale(uint256 _totalToken , uint256 _tokenPrice , uint _startTime , uint _endTime) external onlyowner returns(bool){
         require(_startTime>=block.timestamp,"Invalid date entered");
-        require(_startTime > _endTime,"End time should be more than start time");
+        require(_startTime < _endTime,"End time should be more than start time");
         
         id++;
         preSaleNumber[id].startTime = _startTime;
@@ -188,7 +188,7 @@ contract vesting {
 
 // This is the most important function which locks the investment and other details .
 
-    function lock(uint256 _id ,address _from , uint256 _amount , bytes32 _referalCode) external {
+    function lock(uint256 _id ,address _from , uint256 _amount ) external {
         require(_amount <= preSaleNumber[id].totalTokens , "Insufficient tokens try a lower value");
         require(block.timestamp > preSaleNumber[id].startTime , "Time of presale has not yet arrived");
         require(block.timestamp > preSaleNumber[id].endTime , "Time of presale has passed");// block.timestamp < preSaleNumber[id].endTime 
@@ -205,10 +205,10 @@ contract vesting {
         preSaleInvestorList[_id][cat][_investor].locked = true;
         preSaleInvestorList[_id][cat][_investor].claimed = false;
         preSaleInvestorList[_id][cat][_investor].lockTime = TGE;
-        preSaleInvestorList[_id][cat][_investor].refferal = keccak256(abi.encodePacked(_investor)); 
+        // preSaleInvestorList[_id][cat][_investor].refferal = keccak256(abi.encodePacked(_investor)); 
 
-        referal( preSaleInvestorList[_id][cat][_investor].refferal , _investor);
-        token.transferFrom(_from , referralMap[_referalCode] , _amount/20) ;
+        // referal( preSaleInvestorList[_id][cat][_investor].refferal , _investor);
+        // token.transferFrom(_from , referralMap[_referalCode] , _amount/20) ;
 
     }
 
