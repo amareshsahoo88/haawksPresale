@@ -32,7 +32,7 @@ contract vesting {
         bool claimed;
         uint256 lockTime;
         uint category;
-        uint refferal;
+        uint refferal;// uint
         
     }
 
@@ -72,16 +72,16 @@ contract vesting {
 
     uint256 public tgeTimestamp;
 
-    constructor (address _token, uint16 year, uint256 month, uint256 day) {
+    constructor (address _token, uint16 year, uint256 month, uint256 day, uint hour, uint sec) {
         owner = msg.sender;
         token = IERC20(_token);
 
-        tgeTimestamp = dateToTimestamp(year, month, day);
+        tgeTimestamp = dateToTimestamp(year, month, day, hour, sec);
         
     }
 
     // unix timestamp conversion  
-    function dateToTimestamp(uint16 year, uint month, uint day) public pure returns (uint256) {
+    function dateToTimestamp(uint16 year, uint month, uint day,uint hour, uint sec) public pure returns (uint256) {
         require(year >= 1970, "Year must be 1970 or later");
         require(month >= 1 && month <= 12, "Month must be between 1 and 12");
         require(day >= 1 && day <= 31, "Day must be between 1 and 31");
@@ -91,6 +91,7 @@ contract vesting {
         
         // add up the number of seconds for each month
         for (i = 1; i < month; i++) {
+            
             if (i == 2) { // February
                 if (isLeapYear(year)) {
                     timestamp += 2505600; // 29 days in a leap year
@@ -107,7 +108,7 @@ contract vesting {
         // add the number of seconds for the given day
         timestamp += (uint256(day) - 1) * 86400; // 86400 seconds in a day
         
-        return timestamp;
+        return timestamp+uint(hour)*3600+ uint(sec);
     }
     
     function isLeapYear(uint16 year) internal pure returns (bool) {
@@ -188,33 +189,61 @@ contract vesting {
 
 // This is the most important function which locks the investment and other details .
 
-    function lock(uint256 _id ,address _from , uint256 _amount ) external {
-        require(_amount <= preSaleNumber[id].totalTokens , "Insufficient tokens try a lower value");
-        require(block.timestamp > preSaleNumber[id].startTime , "Time of presale has not yet arrived");
-        require(block.timestamp > preSaleNumber[id].endTime , "Time of presale has passed");// block.timestamp < preSaleNumber[id].endTime 
+    // function lock(uint256 _id ,address _from , uint256 _amount ) external payable  {
+    //     require(_amount <= preSaleNumber[id].totalTokens , "Insufficient tokens try a lower value");
+    //     require(block.timestamp > preSaleNumber[id].startTime , "Time of presale has not yet arrived");
+    //     require(block.timestamp < preSaleNumber[id].endTime , "Time of presale has passed");// block.timestamp < preSaleNumber[id].endTime 
         
-        cat = category(_amount);
+    //     cat = category(_amount);
 
+    //     address _investor = msg.sender;
+
+    //     pushToArrayById(_id , _investor);
+
+    //     token.transferFrom(_from, address(this), _amount);
+        // preSaleInvestorList[_id][cat][_investor].balance = _amount;
+        // preSaleInvestorList[_id][cat][_investor].invested = true;
+        // preSaleInvestorList[_id][cat][_investor].locked = true;
+        // preSaleInvestorList[_id][cat][_investor].claimed = false;
+        // preSaleInvestorList[_id][cat][_investor].lockTime = TGE;
+
+
+    
+    function lock(uint256 _presaleId,address _from, uint256 _amount) external payable {
+        require(_amount <= preSaleNumber[_presaleId].totalTokens, "Insufficient tokens. Please try a lower value.");
+        require(block.timestamp > preSaleNumber[_presaleId].startTime, "Presale has not yet started.");
+        require(block.timestamp < preSaleNumber[_presaleId].endTime, "Presale has ended.");
+        require(msg.value == _amount, "The amount sent does not match the amount to be locked.");
+
+        cat = category(_amount);
         address _investor = msg.sender;
 
-        pushToArrayById(_id , _investor);
+        pushToArrayById(_presaleId, _investor);
 
+        preSaleInvestorList[_presaleId][cat][_investor].balance = _amount;
+        preSaleInvestorList[_presaleId][cat][_investor].invested = true;
+        preSaleInvestorList[_presaleId][cat][_investor].locked = true;
+        preSaleInvestorList[_presaleId][cat][_investor].claimed = false;
+        preSaleInvestorList[_presaleId][cat][_investor].lockTime = TGE;
+
+        // Transfer the locked amount to the contract
         token.transferFrom(_from, address(this), _amount);
-        preSaleInvestorList[_id][cat][_investor].balance = _amount;
-        preSaleInvestorList[_id][cat][_investor].invested = true;
-        preSaleInvestorList[_id][cat][_investor].locked = true;
-        preSaleInvestorList[_id][cat][_investor].claimed = false;
-        preSaleInvestorList[_id][cat][_investor].lockTime = TGE;
+        
+}
+    function getBalanceOfContract() public view returns(uint){
+        return address(this).balance;
+    }
+
         // preSaleInvestorList[_id][cat][_investor].refferal = keccak256(abi.encodePacked(_investor)); 
 
         // referal( preSaleInvestorList[_id][cat][_investor].refferal , _investor);
         // token.transferFrom(_from , referralMap[_referalCode] , _amount/20) ;
 
-    }
+
 
 // This function is to find the value of the unlocked tokens.
 
-    function unlockedTokens(uint _id , uint _cat) public returns (uint256) {
+    function unlockedTokens(uint _id , uint _cat) public  returns (uint256) {
         
         address _investor = msg.sender;
 
@@ -271,8 +300,6 @@ contract vesting {
 
 // this is a redundant function which shall be removed and its used while testing shall be done
 
-    function getTime() external view returns (uint256) {
+    function getTime() external view returns (uint) {
         return block.timestamp;
-    }
-
-}
+    }}
