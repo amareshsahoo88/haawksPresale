@@ -13,12 +13,16 @@ contract vesting {
         uint totalTokens;
         uint tokenPrice;
     }
-    
+    struct UserLock {
+        address erc20Address;
+        uint unitAmount;
+        uint tokenAmount;
+    }
     event StorePreSalePhase(uint id,uint startTime,
         uint endTime,
         uint totalTokens,
         uint tokenPrice) ; 
-
+    mapping (uint => mapping (address => UserLock)) public locks;
 // This structure is for the investor details who is investing in the pre-sale . 
 // This shall keep updating as the investors keep getting added.
 
@@ -29,6 +33,7 @@ contract vesting {
         uint256 availableForClaim;
         uint256 tokenClaimed;
         bool locked;
+        uint lockedTokens;//number of token locked after user invests
         bool claimed;
         uint256 lockTime;
         uint category;
@@ -79,7 +84,7 @@ contract vesting {
         tgeTimestamp = dateToTimestamp(year, month, day, hour, sec);
         
     }
-
+    
     // unix timestamp conversion  
     function dateToTimestamp(uint16 year, uint month, uint day,uint hour, uint sec) public pure returns (uint256) {
         require(year >= 1970, "Year must be 1970 or later");
@@ -208,26 +213,65 @@ contract vesting {
         // preSaleInvestorList[_id][cat][_investor].lockTime = TGE;
 
 
-    
-    function lock(uint256 _presaleId,address _from, uint256 _amount) external payable {
-        require(_amount <= preSaleNumber[_presaleId].totalTokens, "Insufficient tokens. Please try a lower value.");
-        require(block.timestamp > preSaleNumber[_presaleId].startTime, "Presale has not yet started.");
-        require(block.timestamp < preSaleNumber[_presaleId].endTime, "Presale has ended.");
-        require(msg.value == _amount, "The amount sent does not match the amount to be locked.");
+    // amount shall be paid to the contrract in USDT by user
+    function lock(uint256 presaleId,address erc20Address, uint256 unitAmount) public payable {
+        require(unitAmount <= preSaleNumber[presaleId].totalTokens, "Insufficient tokens. Please try a lower value.");
+        require(block.timestamp > preSaleNumber[presaleId].startTime, "Presale has not yet started.");
+        require(block.timestamp < preSaleNumber[presaleId].endTime, "Presale has ended.");
+        require(msg.value == unitAmount, "The amount sent does not match the amount to be locked.");
 
-        cat = category(_amount);
+        cat = category(unitAmount);
         address _investor = msg.sender;
 
-        pushToArrayById(_presaleId, _investor);
+        pushToArrayById(presaleId, _investor);
+//--
+        // Determine the price of the token based on the presale ID
+        uint tokenPrice = 0;
+        if (presaleId == 1) {
+            tokenPrice = 10; // 0.1 USD per token
+        } else if (presaleId == 2) {
+            tokenPrice = 12; // 0.12 USD per token
+        } else if (presaleId == 3) {
+            tokenPrice = 14; // 0.14 USD per token
+        } else if (presaleId == 4) {
+            tokenPrice = 16; // 0.16 USD per token
+        } else if (presaleId == 5) {
+            tokenPrice = 18; // 0.18 USD per token
+        } else if (presaleId == 6) {
+            tokenPrice = 20; // 0.20 USD per token
+        } else if (presaleId == 7) {
+            tokenPrice = 25; // 0.25 USD per token
+        } else {
+            revert("Invalid presale ID"); // Revert if the presale ID is invalid
+        }
 
-        preSaleInvestorList[_presaleId][cat][_investor].balance = _amount;
-        preSaleInvestorList[_presaleId][cat][_investor].invested = true;
-        preSaleInvestorList[_presaleId][cat][_investor].locked = true;
-        preSaleInvestorList[_presaleId][cat][_investor].claimed = false;
-        preSaleInvestorList[_presaleId][cat][_investor].lockTime = TGE;
+        // Calculate the number of ERC20 tokens to lock based on the unit amount, token price, and gas fee
+        uint gasPrice = tx.gasprice;
+        uint gasLimit = gasleft();
+        uint totalCost = unitAmount + gasPrice * gasLimit;// in wei
+        uint tokenAmount = totalCost * 10**18  / tokenPrice ;// all units are in cents as we are using uint everywhere
+
+        // Store the user's lock information in the mapping
+        locks[presaleId][msg.sender] = UserLock({
+            erc20Address: erc20Address,
+            unitAmount: unitAmount,
+            tokenAmount: tokenAmount
+        });
+
+        
+//--
+
+// below 2 comment lines is what i feel should be added
+        preSaleInvestorList[presaleId][cat][_investor].balance = unitAmount;// this should be the number of tokens?? rather than USDT
+        //preSaleInvestorList[presaleId][cat][_investor].balance -= unitAmount;
+        //preSaleInvestorList[presaleId][cat][_investor].lockedTokens = tokenAmount; 
+        preSaleInvestorList[presaleId][cat][_investor].invested = true;
+        preSaleInvestorList[presaleId][cat][_investor].locked = true;
+        preSaleInvestorList[presaleId][cat][_investor].claimed = false;
+        preSaleInvestorList[presaleId][cat][_investor].lockTime = TGE;
 
         // Transfer the locked amount to the contract
-        token.transferFrom(_from, address(this), _amount);
+        token.transferFrom(erc20Address, address(this), unitAmount);
         
 }
     function getBalanceOfContract() public view returns(uint){
@@ -237,7 +281,7 @@ contract vesting {
         // preSaleInvestorList[_id][cat][_investor].refferal = keccak256(abi.encodePacked(_investor)); 
 
         // referal( preSaleInvestorList[_id][cat][_investor].refferal , _investor);
-        // token.transferFrom(_from , referralMap[_referalCode] , _amount/20) ;
+        // token.transferFrom(_from , referralMap[_referalCode] , unitAmount/20) ;
 
 
 
