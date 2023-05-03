@@ -2,7 +2,14 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-contract vesting {
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
+
+
+
+contract vesting is Ownable {
+
+    using Counters for Counters.Counter;
 
 // This structure will create a presale which shall have 7 phases 1% of total supply each.
 // This shall be setup by the owner.
@@ -33,6 +40,7 @@ contract vesting {
         uint256 lockTime;
         uint category;
         uint refferal;
+        bool refferalUsed;
         
     }
 
@@ -50,11 +58,11 @@ contract vesting {
 
     IERC20 public token;
     uint256 public TGE = block.timestamp;
-    address public owner; 
-    uint public id ;
+    Counters.Counter public id;
+    Counters.Counter public referralID;
     uint public cat;
     address [][] idList ;
-    uint256 count;
+    Counters.Counter count;
     uint256 len ;
    
 // This mapping is to store details of the individual phases of the preSale
@@ -66,17 +74,19 @@ contract vesting {
     mapping(uint256  => mapping ( uint =>mapping (address => preSaleInvestor))) public preSaleInvestorList;
 
 // this mapping is for storing value of referal code to the address of the sponcer
-    mapping(bytes32 => address) referralMap ;
+    mapping(uint256 => address) referralMap ;
+    mapping(address => uint256) referralMap2 ;
+   
 
 // constructor stores the address of the owner and the token.
 
     uint256 public tgeTimestamp;
 
     constructor (address _token, uint16 year, uint256 month, uint256 day) {
-        owner = msg.sender;
+        
         token = IERC20(_token);
-
         tgeTimestamp = dateToTimestamp(year, month, day);
+         referralID = Counters.Counter(1000);
         
     }
 
@@ -123,32 +133,25 @@ contract vesting {
     }
 
 
-// modifier used to implement in functions which only the owner can call
-
-    modifier onlyowner {
-        require(msg.sender == owner , "Only owner can change the TGE");
-        _;
-    }
-
 // Through this function TGE date can be altered by the owner .
 
-    function setTGE (uint _TGE) public onlyowner {
+    function setTGE (uint _TGE) public onlyOwner  {
         require(_TGE>=block.timestamp,"Invalid date entered");
         TGE = _TGE ;
     }
 
 // This function shall create a presale phase and the values are set.
 
-    function createPreSale(uint256 _totalToken , uint256 _tokenPrice , uint _startTime , uint _endTime) external onlyowner returns(bool){
+    function createPreSale(uint256 _totalToken , uint256 _tokenPrice , uint _startTime , uint _endTime) external onlyOwner  returns(bool){
         require(_startTime>=block.timestamp,"Invalid date entered");
         require(_startTime < _endTime,"End time should be more than start time");
         
-        id++;
-        preSaleNumber[id].startTime = _startTime;
-        preSaleNumber[id].endTime = _endTime;
-        preSaleNumber[id].totalTokens = _totalToken;
-        preSaleNumber[id].tokenPrice = _tokenPrice;
-        emit StorePreSalePhase(id, preSaleNumber[id].startTime, preSaleNumber[id].endTime, preSaleNumber[id].totalTokens, preSaleNumber[id].tokenPrice);
+        id.increment();
+        preSaleNumber[id.current()].startTime = _startTime;
+        preSaleNumber[id.current()].endTime = _endTime;
+        preSaleNumber[id.current()].totalTokens = _totalToken;
+        preSaleNumber[id.current()].tokenPrice = _tokenPrice;
+        emit StorePreSalePhase(id.current(), preSaleNumber[id.current()].startTime, preSaleNumber[id.current()].endTime, preSaleNumber[id.current()].totalTokens, preSaleNumber[id.current()].tokenPrice);
         //emit an event here along with timestamp
         return true;
     }
@@ -181,34 +184,42 @@ contract vesting {
 
     function pushToArrayById(uint256 _id , address _investor) public {
         require(_investor!= address(0),"Invalid address");
-            idList[_id][count] = _investor;
-            count++;
+            idList[_id][count.current()] = _investor;
+            count.increment();
         
     }
 
 // This is the most important function which locks the investment and other details .
 
-    function lock(uint256 _id ,address _from , uint256 _amount ) external {
-        require(_amount <= preSaleNumber[id].totalTokens , "Insufficient tokens try a lower value");
-        require(block.timestamp > preSaleNumber[id].startTime , "Time of presale has not yet arrived");
-        require(block.timestamp > preSaleNumber[id].endTime , "Time of presale has passed");// block.timestamp < preSaleNumber[id].endTime 
+        function lock(uint256 _id ,address _from , uint256 _amount,uint _referralCode ) external {
+        require(_amount <= preSaleNumber[_id].totalTokens , "Insufficient tokens try a lower value");
+        require(block.timestamp > preSaleNumber[_id].startTime , "Time of presale has not yet arrived");
+        require(block.timestamp > preSaleNumber[_id].endTime , "Time of presale has passed");// block.timestamp < preSaleNumber[_id].endTime 
         
         cat = category(_amount);
 
         address _investor = msg.sender;
 
         pushToArrayById(_id , _investor);
-
+        
         token.transferFrom(_from, address(this), _amount);
         preSaleInvestorList[_id][cat][_investor].balance = _amount;
         preSaleInvestorList[_id][cat][_investor].invested = true;
         preSaleInvestorList[_id][cat][_investor].locked = true;
         preSaleInvestorList[_id][cat][_investor].claimed = false;
         preSaleInvestorList[_id][cat][_investor].lockTime = TGE;
-        // preSaleInvestorList[_id][cat][_investor].refferal = keccak256(abi.encodePacked(_investor)); 
 
-        // referal( preSaleInvestorList[_id][cat][_investor].refferal , _investor);
-        // token.transferFrom(_from , referralMap[_referalCode] , _amount/20) ;
+
+        // Referral code logic
+        if(_referralCode!=0 && referralMap[_referralCode]!=address(0)) {
+            preSaleInvestorList[_id][cat][_investor].refferalUsed=true;
+            preSaleInvestorList[_id][cat][_investor].refferal=_referralCode;
+            token.transferFrom(_from , referralMap[_referralCode] , _amount/20) ;
+        }
+        else{
+            preSaleInvestorList[_id][cat][_investor].refferalUsed=false;
+        }
+        
 
     }
 
@@ -249,7 +260,7 @@ contract vesting {
         }
 
         if(_claimAmount<= preSaleInvestorList[_id][_cat][_investor].availableForClaim) {
-            preSaleInvestorList[id][_cat][_investor].claimed = true;
+            preSaleInvestorList[_id][_cat][_investor].claimed = true;
             preSaleInvestorList[_id][_cat][_investor].locked = false;
             token.transfer(_investor , _claimAmount);
         }
@@ -258,9 +269,20 @@ contract vesting {
 
 // this function is to put values into the array with key value of referral code and sponcer address
 
-    function referal(bytes32 _code , address _sponcer) public {
-        referralMap[_code] = _sponcer ;
+    function referal(address _sponcer) public {
+        require(referralMap2[_sponcer]==0,"Referal code already generated");
+        // uint referralcode=(uint(keccak256(abi.encodePacked(block.timestamp,block.gaslimit,_sponcer))))%10000;
+        //     uint i=0;
+        //     while(referralcode==referalCodeList[i]) {
+        //       referralcode= (uint(keccak256(abi.encodePacked(block.timestamp,block.gaslimit,_sponcer,i))))%10000;
+                // i++; 
+        //     }        
+        referralMap[referralID.current()] = _sponcer;
+        referralMap2[_sponcer]=referralID.current();
+        referralID.increment();
 
+
+    
     }
 
 // this function shall return the array with the addresses of the investors of a particular phase.
